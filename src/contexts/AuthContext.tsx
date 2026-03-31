@@ -36,13 +36,45 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
 
   const loadStoredAuth = async () => {
     try {
-      const { access, refresh } = await getTokens();
-      const user = await getUserData();
-      if (access && refresh && user) {
-        setState({ user, access, refresh, isAuthenticated: true });
-      }
+      // Add timeout to prevent hanging if SecureStore is slow
+      const timeoutPromise = new Promise<never>((_, reject) =>
+        setTimeout(() => reject(new Error('timeout')), 5000)
+      );
+
+      const loadPromise = async () => {
+        const { access, refresh } = await getTokens();
+        const user = await getUserData();
+        if (access && refresh && user) {
+          // Validate token by making a quick API call
+          try {
+            const { createApi } = require('../services/api');
+            const res = await createApi(access).get('/api/accounts/users/me/', { timeout: 4000 });
+            if (res.data) {
+              setState({ user: res.data, access, refresh, isAuthenticated: true });
+              return;
+            }
+          } catch {
+            // Token might be expired, try refreshing
+            try {
+              const axios = require('axios').default;
+              const { API_BASE_URL, setTokens: saveTokens } = require('../services/api');
+              const refreshRes = await axios.post(`${API_BASE_URL}/api/accounts/token/refresh/`, { refresh }, { timeout: 4000 });
+              const newAccess = refreshRes.data.access;
+              await saveTokens(newAccess, refresh);
+              setState({ user, access: newAccess, refresh, isAuthenticated: true });
+              return;
+            } catch {
+              // Refresh also failed, clear everything
+              await clearTokens();
+            }
+          }
+        }
+      };
+
+      await Promise.race([loadPromise(), timeoutPromise]);
     } catch {
-      // tokens invalid or missing
+      // Timeout or error — clear stored data and show login
+      try { await clearTokens(); } catch {}
     } finally {
       setIsLoading(false);
     }
@@ -57,6 +89,11 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
       refresh: data.refresh,
       isAuthenticated: true,
     });
+    // Send heartbeat to mark user online immediately
+    try {
+      const { createApi } = require('../services/api');
+      await createApi(data.access).post('/api/accounts/presence/heartbeat/');
+    } catch { /* ignore */ }
   };
 
   const logout = async () => {

@@ -84,3 +84,15 @@ export type DashboardStats = {
   sub_tasks_completed: number;
   developers_count: number;
 };
+
+export type UserStatus = 'available' | 'busy' | 'away' | 'offline';
+
+export type OnlineUser = {
+  id: number;
+  username: string;
+  email: string;
+  status: UserStatus;
+  is_online: boolean;
+  last_activity: string;
+  last_seen: string;
+};
