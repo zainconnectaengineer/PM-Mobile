@@ -7,7 +7,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { Colors, Spacing, Radius, FontSize } from '../constants/theme';
 import { useAuth } from '../contexts/AuthContext';
 import { createApi } from '../services/api';
-import type { ProjectMember } from '../types';
+import type { ProjectMember, Phase, Task } from '../types';
 
 type TaskStatus = 'PENDING' | 'IN_PROGRESS' | 'COMPLETED';
 
@@ -18,23 +18,35 @@ export default function CreateTaskScreen({ route, navigation }: any) {
   const [description, setDescription] = useState('');
   const [status, setStatus] = useState<TaskStatus>('PENDING');
   const [assignedTo, setAssignedTo] = useState<number | null>(null);
+  const [startFrom, setStartFrom] = useState('');
   const [dueDate, setDueDate] = useState('');
+  const [selectedPhase, setSelectedPhase] = useState<number | null>(null);
+  const [parentTask, setParentTask] = useState<number | null>(null);
   const [members, setMembers] = useState<ProjectMember[]>([]);
+  const [phases, setPhases] = useState<Phase[]>([]);
+  const [projectTasks, setProjectTasks] = useState<Task[]>([]);
   const [showMembers, setShowMembers] = useState(false);
+  const [showPhases, setShowPhases] = useState(false);
+  const [showParentTasks, setShowParentTasks] = useState(false);
   const [loading, setLoading] = useState(false);
   const [loadingMembers, setLoadingMembers] = useState(true);
 
   useEffect(() => {
-    loadMembers();
+    loadData();
   }, []);
 
-  const loadMembers = async () => {
+  const loadData = async () => {
     try {
-      const res = await createApi(access).get(`/api/pm/projects/${projectId}/employees/`);
-      setMembers(res.data?.results ?? []);
-    } catch {
-      // ignore
-    } finally {
+      const api = createApi(access);
+      const [membersRes, phasesRes, tasksRes] = await Promise.all([
+        api.get(`/api/pm/projects/${projectId}/employees/`),
+        api.get(`/api/pm/projects/${projectId}/phases/`).catch(() => ({ data: [] })),
+        api.get('/api/pm/tasks/').catch(() => ({ data: [] })),
+      ]);
+      setMembers(membersRes.data?.results ?? []);
+      setPhases(phasesRes.data ?? []);
+      setProjectTasks((tasksRes.data ?? []).filter((t: Task) => t.project === projectId));
+    } catch {} finally {
       setLoadingMembers(false);
     }
   };
@@ -52,11 +64,13 @@ export default function CreateTaskScreen({ route, navigation }: any) {
         status,
       };
       if (assignedTo) payload.assigned_to = assignedTo;
-      if (dueDate.trim()) {
-        // Validate date format YYYY-MM-DD
-        if (/^\d{4}-\d{2}-\d{2}$/.test(dueDate.trim())) {
-          payload.due_date = dueDate.trim();
-        }
+      if (selectedPhase) payload.phase = selectedPhase;
+      if (parentTask) payload.parent_task = parentTask;
+      if (startFrom.trim() && /^\d{4}-\d{2}-\d{2}$/.test(startFrom.trim())) {
+        payload.start_from = startFrom.trim();
+      }
+      if (dueDate.trim() && /^\d{4}-\d{2}-\d{2}$/.test(dueDate.trim())) {
+        payload.due_date = dueDate.trim();
       }
 
       await createApi(access).post(`/api/pm/tasks/project/${projectId}/create/`, payload);
@@ -178,6 +192,108 @@ export default function CreateTaskScreen({ route, navigation }: any) {
             )}
           </View>
         )}
+
+        {/* Phase */}
+        {phases.length > 0 && (
+          <>
+            <Text style={styles.label}>Phase</Text>
+            <TouchableOpacity
+              style={styles.selectBtn}
+              onPress={() => setShowPhases(!showPhases)}
+            >
+              <Ionicons name="flag-outline" size={18} color={Colors.textMuted} />
+              <Text style={[styles.selectBtnText, selectedPhase ? { color: Colors.text } : undefined]}>
+                {phases.find(p => p.id === selectedPhase)?.name || 'Select phase'}
+              </Text>
+              <Ionicons name={showPhases ? 'chevron-up' : 'chevron-down'} size={18} color={Colors.textMuted} />
+            </TouchableOpacity>
+            {showPhases && (
+              <View style={styles.memberList}>
+                {selectedPhase && (
+                  <TouchableOpacity
+                    style={styles.memberItem}
+                    onPress={() => { setSelectedPhase(null); setShowPhases(false); }}
+                  >
+                    <Ionicons name="close-circle-outline" size={18} color={Colors.textMuted} />
+                    <Text style={[styles.memberItemText, { color: Colors.textMuted }]}>No phase</Text>
+                  </TouchableOpacity>
+                )}
+                {phases.map(p => (
+                  <TouchableOpacity
+                    key={p.id}
+                    style={[styles.memberItem, selectedPhase === p.id && styles.memberItemActive]}
+                    onPress={() => { setSelectedPhase(p.id); setShowPhases(false); }}
+                  >
+                    <View style={[styles.memberDot, { backgroundColor: Colors.info }]}>
+                      <Ionicons name="flag" size={14} color="#fff" />
+                    </View>
+                    <Text style={styles.memberItemText}>{p.name}</Text>
+                    {selectedPhase === p.id && (
+                      <Ionicons name="checkmark" size={18} color={Colors.primary} />
+                    )}
+                  </TouchableOpacity>
+                ))}
+              </View>
+            )}
+          </>
+        )}
+
+        {/* Parent Task */}
+        {projectTasks.length > 0 && (
+          <>
+            <Text style={styles.label}>Parent Task</Text>
+            <TouchableOpacity
+              style={styles.selectBtn}
+              onPress={() => setShowParentTasks(!showParentTasks)}
+            >
+              <Ionicons name="git-branch-outline" size={18} color={Colors.textMuted} />
+              <Text style={[styles.selectBtnText, parentTask ? { color: Colors.text } : undefined]}>
+                {projectTasks.find(t => t.id === parentTask)?.title || 'Select parent task (optional)'}
+              </Text>
+              <Ionicons name={showParentTasks ? 'chevron-up' : 'chevron-down'} size={18} color={Colors.textMuted} />
+            </TouchableOpacity>
+            {showParentTasks && (
+              <View style={styles.memberList}>
+                {parentTask && (
+                  <TouchableOpacity
+                    style={styles.memberItem}
+                    onPress={() => { setParentTask(null); setShowParentTasks(false); }}
+                  >
+                    <Ionicons name="close-circle-outline" size={18} color={Colors.textMuted} />
+                    <Text style={[styles.memberItemText, { color: Colors.textMuted }]}>No parent</Text>
+                  </TouchableOpacity>
+                )}
+                {projectTasks.map(t => (
+                  <TouchableOpacity
+                    key={t.id}
+                    style={[styles.memberItem, parentTask === t.id && styles.memberItemActive]}
+                    onPress={() => { setParentTask(t.id); setShowParentTasks(false); }}
+                  >
+                    <Text style={[styles.memberItemText, { fontWeight: '500' }]}>#{t.id} {t.title}</Text>
+                    {parentTask === t.id && (
+                      <Ionicons name="checkmark" size={18} color={Colors.primary} />
+                    )}
+                  </TouchableOpacity>
+                ))}
+              </View>
+            )}
+          </>
+        )}
+
+        {/* Start From */}
+        <Text style={styles.label}>Start Date</Text>
+        <View style={styles.inputWithIcon}>
+          <Ionicons name="calendar-outline" size={18} color={Colors.textMuted} />
+          <TextInput
+            style={styles.inputInner}
+            placeholder="YYYY-MM-DD"
+            placeholderTextColor={Colors.textMuted}
+            value={startFrom}
+            onChangeText={setStartFrom}
+            keyboardType="numbers-and-punctuation"
+            maxLength={10}
+          />
+        </View>
 
         {/* Due date */}
         <Text style={styles.label}>Due Date</Text>

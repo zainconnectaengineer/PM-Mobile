@@ -44,9 +44,36 @@ export type ProjectMember = {
   added_at: string;
 };
 
+export type Phase = {
+  id: number;
+  project: number;
+  name: string;
+  description: string;
+  start_date: string | null;
+  end_date: string | null;
+  milestone: string;
+  order: number;
+  created_at: string;
+  task_count: number;
+};
+
+export type ChildTask = {
+  id: number;
+  title: string;
+  description: string;
+  created_by: number | null;
+  status: 'PENDING' | 'IN_PROGRESS' | 'COMPLETED';
+  start_from: string | null;
+  due_date: string | null;
+  created_at: string;
+  collaborators: { id: number; username: string }[];
+};
+
 export type Task = {
   id: number;
   project: number;
+  parent_task: number | null;
+  phase: number | null;
   title: string;
   description: string;
   created_by: number | null;
@@ -58,6 +85,7 @@ export type Task = {
   updated_at: string;
   helpers: { id: number; username: string; email: string }[];
   subtasks: SubTask[];
+  child_tasks: ChildTask[];
 };
 
 export type SubTask = {

@@ -47,13 +47,18 @@ export default function TasksScreen({ navigation }: any) {
     return (
       <TouchableOpacity
         activeOpacity={0.7}
-        onPress={() => navigation.navigate('TaskDetail', { taskId: item.id, taskTitle: item.title })}
+        onPress={() => navigation.push('TaskDetail', { taskId: item.id, taskTitle: item.title })}
         style={styles.card}
       >
         <View style={styles.cardTop}>
-          <View style={[styles.statusBadge, { backgroundColor: cfg.bg }]}>
-            <Ionicons name={cfg.icon} size={12} color={cfg.color} />
-            <Text style={[styles.statusLabel, { color: cfg.color }]}>{cfg.label}</Text>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: Spacing.sm }}>
+            <View style={styles.taskIdBadge}>
+              <Text style={styles.taskIdText}>#{item.id}</Text>
+            </View>
+            <View style={[styles.statusBadge, { backgroundColor: cfg.bg }]}>
+              <Ionicons name={cfg.icon} size={12} color={cfg.color} />
+              <Text style={[styles.statusLabel, { color: cfg.color }]}>{cfg.label}</Text>
+            </View>
           </View>
           {item.due_date && (
             <View style={styles.dueBadge}>
@@ -63,6 +68,12 @@ export default function TasksScreen({ navigation }: any) {
           )}
         </View>
         <Text style={styles.taskTitle}>{item.title}</Text>
+        {item.parent_task && (
+          <View style={styles.parentBadge}>
+            <Ionicons name="git-branch-outline" size={12} color={Colors.textSecondary} />
+            <Text style={styles.parentText}>Child task</Text>
+          </View>
+        )}
         {item.description ? (
           <Text style={styles.taskDesc} numberOfLines={2}>{item.description}</Text>
         ) : null}
@@ -73,6 +84,12 @@ export default function TasksScreen({ navigation }: any) {
               <Text style={styles.subtaskText}>
                 {item.subtasks.filter(s => s.status === 'COMPLETED').length}/{item.subtasks.length} subtasks
               </Text>
+            </View>
+          )}
+          {item.child_tasks?.length > 0 && (
+            <View style={styles.subtaskBadge}>
+              <Ionicons name="git-branch-outline" size={12} color={Colors.textMuted} />
+              <Text style={styles.subtaskText}>{item.child_tasks.length} child tasks</Text>
             </View>
           )}
           {item.helpers?.length > 0 && (
@@ -172,6 +189,15 @@ const styles = StyleSheet.create({
   dueBadge: { flexDirection: 'row', alignItems: 'center', gap: 4 },
   dueText: { fontSize: FontSize.xs, color: Colors.textMuted },
   taskTitle: { fontSize: FontSize.md, fontWeight: '600', color: Colors.text },
+  taskIdBadge: {
+    backgroundColor: Colors.surfaceAlt, borderRadius: Radius.full,
+    paddingHorizontal: 8, paddingVertical: 2,
+  },
+  taskIdText: { fontSize: FontSize.xs, fontWeight: '700', color: Colors.textSecondary },
+  parentBadge: {
+    flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 2,
+  },
+  parentText: { fontSize: FontSize.xs, color: Colors.textSecondary },
   taskDesc: { fontSize: FontSize.sm, color: Colors.textSecondary, marginTop: Spacing.xs, lineHeight: 20 },
   cardBottom: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginTop: Spacing.md },
   subtaskBadge: { flexDirection: 'row', alignItems: 'center', gap: 4 },

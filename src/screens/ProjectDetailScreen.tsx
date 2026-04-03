@@ -9,7 +9,7 @@ import { useFocusEffect } from '@react-navigation/native';
 import { Colors, Spacing, Radius, FontSize } from '../constants/theme';
 import { useAuth } from '../contexts/AuthContext';
 import { createApi } from '../services/api';
-import type { Project, ProjectMember, Task } from '../types';
+import type { Project, ProjectMember, Task, Phase } from '../types';
 
 const STATUS_CONFIG = {
   PENDING: { color: Colors.warning, bg: Colors.warningBg, icon: 'time-outline' as const, label: 'Pending' },
@@ -40,21 +40,30 @@ export default function ProjectDetailScreen({ route, navigation }: any) {
   const [deleteInput, setDeleteInput] = useState('');
   const [deleteLoading, setDeleteLoading] = useState(false);
 
+  // Phases
+  const [phases, setPhases] = useState<Phase[]>([]);
+  const [createPhaseVisible, setCreatePhaseVisible] = useState(false);
+  const [phaseForm, setPhaseForm] = useState({ name: '', description: '', milestone: '', start_date: '', end_date: '' });
+  const [creatingPhase, setCreatingPhase] = useState(false);
+  const [selectedPhaseFilter, setSelectedPhaseFilter] = useState<number | null>(null);
+
   const load = async (isRefresh = false) => {
     if (isRefresh) setRefreshing(true); else setLoading(true);
     try {
       const api = createApi(access);
-      const [projRes, memRes, taskRes, usersRes] = await Promise.all([
+      const [projRes, memRes, taskRes, usersRes, phasesRes] = await Promise.all([
         api.get(`/api/pm/projects/${projectId}/`),
         api.get(`/api/pm/projects/${projectId}/employees/`),
         api.get('/api/pm/tasks/'),
         api.get('/api/accounts/users/'),
+        api.get(`/api/pm/projects/${projectId}/phases/`).catch(() => ({ data: [] })),
       ]);
       const proj = projRes.data as Project;
       proj.members = memRes.data?.results || [];
       setProject(proj);
       setTasks((taskRes.data || []).filter((t: Task) => t.project === projectId));
       setAllUsers(usersRes.data || []);
+      setPhases(phasesRes.data || []);
     } catch {
       Alert.alert('Error', 'Failed to load project.');
     } finally {
@@ -149,6 +158,34 @@ export default function ProjectDetailScreen({ route, navigation }: any) {
     }
   };
 
+  // ─── Create Phase ───
+  const handleCreatePhase = async () => {
+    if (!phaseForm.name.trim()) {
+      Alert.alert('Error', 'Phase name is required.');
+      return;
+    }
+    setCreatingPhase(true);
+    try {
+      const payload: any = { name: phaseForm.name.trim() };
+      if (phaseForm.description.trim()) payload.description = phaseForm.description.trim();
+      if (phaseForm.milestone.trim()) payload.milestone = phaseForm.milestone.trim();
+      if (phaseForm.start_date.trim() && /^\d{4}-\d{2}-\d{2}$/.test(phaseForm.start_date.trim()))
+        payload.start_date = phaseForm.start_date.trim();
+      if (phaseForm.end_date.trim() && /^\d{4}-\d{2}-\d{2}$/.test(phaseForm.end_date.trim()))
+        payload.end_date = phaseForm.end_date.trim();
+      await createApi(access).post(`/api/pm/projects/${projectId}/phases/`, payload);
+      Alert.alert('Success', 'Phase created!');
+      setCreatePhaseVisible(false);
+      setPhaseForm({ name: '', description: '', milestone: '', start_date: '', end_date: '' });
+      load();
+    } catch (e: any) {
+      const d = e.response?.data;
+      Alert.alert('Error', d?.name?.[0] || d?.detail || 'Failed to create phase.');
+    } finally {
+      setCreatingPhase(false);
+    }
+  };
+
   if (loading || !project) {
     return (
       <View style={styles.loadingWrap}>
@@ -159,6 +196,9 @@ export default function ProjectDetailScreen({ route, navigation }: any) {
 
   const completed = tasks.filter(t => t.status === 'COMPLETED').length;
   const progress = tasks.length ? Math.round((completed / tasks.length) * 100) : 0;
+  const filteredTasks = selectedPhaseFilter
+    ? tasks.filter(t => t.phase === selectedPhaseFilter)
+    : tasks;
 
   return (
     <ScrollView
@@ -198,9 +238,48 @@ export default function ProjectDetailScreen({ route, navigation }: any) {
         })}
       </View>
 
+      {/* Phases */}
+      <View style={styles.taskHeaderRow}>
+        <Text style={styles.sectionTitle}>Phases ({phases.length})</Text>
+        <TouchableOpacity
+          style={styles.addTaskBtn}
+          onPress={() => { setPhaseForm({ name: '', description: '', milestone: '', start_date: '', end_date: '' }); setCreatePhaseVisible(true); }}
+        >
+          <Ionicons name="flag" size={18} color={Colors.primary} />
+          <Text style={styles.addTaskText}>Create Phase</Text>
+        </TouchableOpacity>
+      </View>
+      {phases.length > 0 && (
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginBottom: Spacing.md }}>
+          <TouchableOpacity
+            style={[styles.phaseTab, !selectedPhaseFilter && styles.phaseTabActive]}
+            onPress={() => setSelectedPhaseFilter(null)}
+          >
+            <Text style={[styles.phaseTabText, !selectedPhaseFilter && styles.phaseTabTextActive]}>All Tasks</Text>
+          </TouchableOpacity>
+          {phases.map(p => (
+            <TouchableOpacity
+              key={p.id}
+              style={[styles.phaseTab, selectedPhaseFilter === p.id && styles.phaseTabActive]}
+              onPress={() => setSelectedPhaseFilter(selectedPhaseFilter === p.id ? null : p.id)}
+            >
+              <Text style={[styles.phaseTabText, selectedPhaseFilter === p.id && styles.phaseTabTextActive]}>
+                {p.name}{p.milestone ? ` · ${p.milestone}` : ''}
+              </Text>
+            </TouchableOpacity>
+          ))}
+        </ScrollView>
+      )}
+      {phases.length === 0 && (
+        <View style={styles.emptyWrap}>
+          <Ionicons name="flag-outline" size={36} color={Colors.textMuted} />
+          <Text style={styles.emptyText}>No phases yet</Text>
+        </View>
+      )}
+
       {/* Tasks */}
       <View style={styles.taskHeaderRow}>
-        <Text style={styles.sectionTitle}>Tasks</Text>
+        <Text style={styles.sectionTitle}>Tasks ({filteredTasks.length})</Text>
         <TouchableOpacity
           style={styles.addTaskBtn}
           onPress={() => navigation.navigate('CreateTask', { projectId, projectName: project.name })}
@@ -209,13 +288,13 @@ export default function ProjectDetailScreen({ route, navigation }: any) {
           <Text style={styles.addTaskText}>Add Task</Text>
         </TouchableOpacity>
       </View>
-      {tasks.length === 0 ? (
+      {filteredTasks.length === 0 ? (
         <View style={styles.emptyWrap}>
           <Ionicons name="clipboard-outline" size={48} color={Colors.textMuted} />
           <Text style={styles.emptyText}>No tasks yet</Text>
         </View>
       ) : (
-        tasks.slice(0, 10).map(task => {
+        filteredTasks.slice(0, 10).map(task => {
           const cfg = STATUS_CONFIG[task.status];
           return (
             <TouchableOpacity
@@ -393,6 +472,89 @@ export default function ProjectDetailScreen({ route, navigation }: any) {
           </View>
         </KeyboardAvoidingView>
       </Modal>
+
+      {/* ═══ Create Phase Modal ═══ */}
+      <Modal visible={createPhaseVisible} transparent animationType="slide" onRequestClose={() => setCreatePhaseVisible(false)}>
+        <KeyboardAvoidingView style={styles.modalOverlay} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+          <View style={styles.modalCard}>
+            <View style={styles.modalHeader}>
+              <View>
+                <Text style={styles.modalTitle}>Create Phase</Text>
+                <Text style={styles.modalSubtitle}>Add a new phase / milestone to the project</Text>
+              </View>
+              <TouchableOpacity onPress={() => setCreatePhaseVisible(false)}>
+                <Ionicons name="close" size={24} color={Colors.textSecondary} />
+              </TouchableOpacity>
+            </View>
+            <ScrollView showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
+              <Text style={styles.fieldLabel}>Phase Name *</Text>
+              <TextInput
+                style={styles.fieldInput}
+                placeholder="e.g. Phase 1 - Planning"
+                placeholderTextColor={Colors.textMuted}
+                value={phaseForm.name}
+                onChangeText={v => setPhaseForm(p => ({ ...p, name: v }))}
+              />
+              <Text style={styles.fieldLabel}>Description</Text>
+              <TextInput
+                style={[styles.fieldInput, { height: 70, textAlignVertical: 'top' }]}
+                placeholder="Brief description..."
+                placeholderTextColor={Colors.textMuted}
+                value={phaseForm.description}
+                onChangeText={v => setPhaseForm(p => ({ ...p, description: v }))}
+                multiline
+              />
+              <Text style={styles.fieldLabel}>Milestone</Text>
+              <TextInput
+                style={styles.fieldInput}
+                placeholder="e.g. MVP Launch, Beta Release"
+                placeholderTextColor={Colors.textMuted}
+                value={phaseForm.milestone}
+                onChangeText={v => setPhaseForm(p => ({ ...p, milestone: v }))}
+              />
+              <View style={{ flexDirection: 'row', gap: Spacing.sm }}>
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.fieldLabel}>Start Date</Text>
+                  <TextInput
+                    style={styles.fieldInput}
+                    placeholder="YYYY-MM-DD"
+                    placeholderTextColor={Colors.textMuted}
+                    value={phaseForm.start_date}
+                    onChangeText={v => setPhaseForm(p => ({ ...p, start_date: v }))}
+                    keyboardType="numbers-and-punctuation"
+                    maxLength={10}
+                  />
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.fieldLabel}>End Date</Text>
+                  <TextInput
+                    style={styles.fieldInput}
+                    placeholder="YYYY-MM-DD"
+                    placeholderTextColor={Colors.textMuted}
+                    value={phaseForm.end_date}
+                    onChangeText={v => setPhaseForm(p => ({ ...p, end_date: v }))}
+                    keyboardType="numbers-and-punctuation"
+                    maxLength={10}
+                  />
+                </View>
+              </View>
+              <TouchableOpacity
+                style={[styles.primaryBtn, creatingPhase && { opacity: 0.6 }]}
+                onPress={handleCreatePhase}
+                disabled={creatingPhase}
+                activeOpacity={0.8}
+              >
+                {creatingPhase ? <ActivityIndicator color="#fff" /> : (
+                  <>
+                    <Ionicons name="flag" size={18} color="#fff" />
+                    <Text style={styles.primaryBtnText}>Create Phase</Text>
+                  </>
+                )}
+              </TouchableOpacity>
+            </ScrollView>
+          </View>
+        </KeyboardAvoidingView>
+      </Modal>
     </ScrollView>
   );
 }
@@ -536,4 +698,17 @@ const styles = StyleSheet.create({
     paddingVertical: Spacing.md,
   },
   deleteBtnFullText: { color: '#fff', fontWeight: '700', fontSize: FontSize.md },
+
+  // Phase tabs
+  phaseTab: {
+    paddingHorizontal: Spacing.lg, paddingVertical: Spacing.sm,
+    borderRadius: Radius.full, backgroundColor: Colors.surface,
+    borderWidth: 1, borderColor: Colors.border, marginRight: Spacing.sm,
+  },
+  phaseTabActive: { backgroundColor: Colors.primary, borderColor: Colors.primary },
+  phaseTabText: { fontSize: FontSize.xs, fontWeight: '600', color: Colors.textSecondary },
+  phaseTabTextActive: { color: Colors.textInverse },
+
+  // Field label
+  fieldLabel: { fontSize: FontSize.sm, fontWeight: '600', color: Colors.text, marginBottom: Spacing.xs, marginTop: Spacing.sm },
 });
