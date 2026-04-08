@@ -79,9 +79,6 @@ export default function AuditLogsScreen() {
           </View>
           <View style={styles.bottomRow}>
             <Text style={styles.time}>{formatTime(item.timestamp)}</Text>
-            {item.ip_address && (
-              <Text style={styles.ip}>{item.ip_address}</Text>
-            )}
           </View>
         </View>
       </View>

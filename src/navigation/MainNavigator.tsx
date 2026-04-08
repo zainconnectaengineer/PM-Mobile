@@ -122,13 +122,15 @@ function MainTabNavigator() {
           shadowOffset: { width: 0, height: -2 },
           shadowOpacity: 0.06,
           shadowRadius: 12,
-          height: Platform.OS === 'ios' ? 88 : 80,
-          paddingBottom: Platform.OS === 'ios' ? 28 : 24,
-          paddingTop: 8,
+          height: Platform.OS === 'ios' ? 92 : 70,
+          paddingBottom: Platform.OS === 'ios' ? 28 : 10,
+          paddingTop: 10,
+          overflow: 'visible' as const,
         },
         tabBarActiveTintColor: Colors.primary,
         tabBarInactiveTintColor: Colors.textMuted,
         tabBarLabelStyle: { fontSize: 11, fontWeight: '600' },
+        tabBarIconStyle: { overflow: 'visible' as const },
         tabBarIcon: ({ focused, color }) => {
           let iconName: keyof typeof Ionicons.glyphMap = 'home';
           if (route.name === 'Dashboard') iconName = focused ? 'home' : 'home-outline';
@@ -140,10 +142,12 @@ function MainTabNavigator() {
           return (
             <View style={focused ? {
               backgroundColor: Colors.primaryBg,
-              borderRadius: 12,
-              paddingHorizontal: 12,
-              paddingVertical: 4,
-            } : undefined}>
+              borderRadius: 16,
+              width: 48,
+              height: 30,
+              alignItems: 'center' as const,
+              justifyContent: 'center' as const,
+            } : { width: 48, height: 30, alignItems: 'center' as const, justifyContent: 'center' as const }}>
               <Ionicons name={iconName} size={22} color={color} />
             </View>
           );
