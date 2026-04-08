@@ -3,8 +3,8 @@ import * as SecureStore from 'expo-secure-store';
 
 // Change this to your backend URL
 // For Android emulator use 10.0.2.2, for physical device use your PC's local IP
-export const API_BASE_URL = 'http://10.39.216.130:8000';
-// export const API_BASE_URL = 'http://72.61.106.77:8002';
+// export const API_BASE_URL = 'http://10.39.216.130:8000';
+export const API_BASE_URL = 'http://72.61.106.77:8002';
 
 interface RetryConfig extends InternalAxiosRequestConfig {
   _retry?: boolean;
